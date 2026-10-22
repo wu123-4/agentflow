@@ -1,0 +1,39 @@
+# 密钥与环境配置不入库
+.env
+*.env.local
+
+# Python
+server/.venv/
+__pycache__/
+*.pyc
+server/dev.db
+.pytest_cache/
+.ruff_cache/
+
+# Node
+web/node_modules/
+
+# 运行期生成物（场景数据 / 报告 / 工具副产物）
+workspace/*.db
+workspace/reports/
+workspace/notifications.log
+workspace/harness_*.txt
+workspace/reconcile_demo.txt
+
+# 其他
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# 检查脚本的一次性副产物
+server/body.json
+server/e2e_out.txt
+server/m3_pending.json
+server/sid.txt
+
+# IDE / 个人笔记（不入库）
+.trae/
+目标.txt
+导学-AgentFlow.md
+面经-AgentFlow.md

@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Markdown 消息内容的基础排版（不引入 @tailwindcss/typography，手写少量样式） */
+.md-body {
+  @apply text-sm leading-relaxed break-words;
+}
+.md-body p {
+  @apply my-1.5;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3 {
+  @apply font-semibold mt-3 mb-1.5;
+}
+.md-body h1 {
+  @apply text-lg;
+}
+.md-body h2 {
+  @apply text-base;
+}
+.md-body ul {
+  @apply list-disc pl-5 my-1.5;
+}
+.md-body ol {
+  @apply list-decimal pl-5 my-1.5;
+}
+.md-body code {
+  @apply bg-gray-100 text-pink-600 rounded px-1 py-0.5 text-xs font-mono;
+}
+.md-body pre {
+  @apply my-2 rounded-lg overflow-x-auto text-xs;
+}
+.md-body pre code {
+  @apply bg-transparent text-inherit p-0;
+}
+.md-body blockquote {
+  @apply border-l-4 border-gray-300 pl-3 text-gray-500 my-2;
+}
+.md-body table {
+  @apply border-collapse my-2 text-xs;
+}
+.md-body th,
+.md-body td {
+  @apply border border-gray-300 px-2 py-1;
+}
+.md-body a {
+  @apply text-blue-600 underline;
+}
