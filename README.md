@@ -68,7 +68,7 @@ Harness  Task Contract / AuthorityController / CompletionGate / Budget（app/har
 
 ```bash
 # 1) 环境变量：仓库不含 .env，从示例复制后填写
-copy .env.example .env          # Windows；macOS/Linux 用 cp .env.example .env
+copy .env.example .env          # Windows；macOS/Linux 改为 cp .env.example .env
 #   至少填一个模型 Key：OPENAI_API_KEY / DEEPSEEK_API_KEY / ANTHROPIC_API_KEY
 #   DEFAULT_MODEL 默认 deepseek-chat，可改成 gpt-4o-mini / qwen-plus 等
 
@@ -76,10 +76,15 @@ copy .env.example .env          # Windows；macOS/Linux 用 cp .env.example .env
 docker compose up -d postgres
 
 # 3) 后端：首次启动自动建表，监听 http://127.0.0.1:8000
-cd server && uv sync && uv run python run.py
+cd server
+uv sync
+uv run python run.py
 
-# 4) 前端：开发服务器 http://localhost:5173（/api 已代理到 8000）
-cd web && npm install && npm run dev
+# 4) 前端：另开一个终端（后端已占用上一个），回到项目根目录
+#    开发服务器 http://localhost:5173（/api 已代理到 8000）
+cd web
+npm install
+npm run dev
 ```
 
 **不想装 Docker / 没有 Key 时**：
