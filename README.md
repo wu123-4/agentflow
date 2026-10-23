@@ -1,10 +1,12 @@
-# AgentFlow — Agent Harness 基础设施
+# AgentFlow — Agent 运行时控制层（Agent Harness）
 
-基于 **LangGraph + LangChain + MCP + React** 构建的 Agent Harness（运行时控制系统）。
+基于 **LangGraph + LangChain + MCP + React** 构建的 Agent 执行控制层（Harness）：把权限、预算与完成判定从模型手里收回到确定性运行时。当前以 NL2SQL 取数场景作为端到端验证载体（场景痛点 → 控制机制 → 可复跑验收）。
 
 > **核心叙事：Agent = Model + Harness。** 模型能力是给定的，但 Harness 的工程深度决定 Agent 能不能在生产环境活下去。本项目不追求让模型更聪明，而是把**权限、状态、副作用与完成证明从模型手中转移到确定性运行时**——模型可以自由选择如何解决问题，但不能自行扩大权限、信任过时状态或从一段有说服力的摘要中宣布成功。
 
-> 当前阶段：M1-M3 已落地验收（流式对话、MCP 热插拔、HITL 人工确认），**Harness Phase 1（任务契约/权限控制/完成门控/预算强制）已交付并通过 14/14 验收**，**Harness Phase 2（链路追踪/预算仪表化/模型降级）已交付并通过 16/16 验收**，**Harness Phase 3（分级恢复/循环检测/上下文治理/不变量消费）已交付并通过 13/13 验收**，**Harness Phase 4（pytest 评估体系 + pgvector 长期记忆）已交付**，**通道路由改造（fast/calc/deep 三档预算 + 单向升级）已交付并通过真实模型评测：全量 `pytest 68 passed`，20 条 NL2SQL 任务上三档对比单通道基线，分档准确率 100%、单查询 token 降 85%**，**前端已适配 Phase 1-4 与通道路由**（契约配置面板、通道选择器、拦截/降级/门控/升级状态条、运行轨迹查看器）。
+> 当前阶段：M1-M3 已落地验收（流式对话、MCP 热插拔、HITL 人工确认），**Harness Phase 1（任务契约/权限控制/完成门控/预算强制）通过 14/14 验收**，**Phase 2（链路追踪/预算仪表化/模型降级）通过 16/16 验收**，**Phase 3（分级恢复/循环检测/上下文治理/不变量消费）通过 13/13 验收**，**Phase 4（pytest 评估体系 + pgvector 长期记忆）已交付**，**通道路由改造（fast/calc/deep 三档预算 + 单向升级）已交付**，**前端已适配 Phase 1-4 与通道路由**（契约配置面板、通道选择器、拦截/降级/门控/升级状态条、运行轨迹查看器）。
+>
+> **评测口径（引用数字前请先读这段）**：上述 `*_check` 验收脚本与 `pytest` 套件（73 passed）均运行在 **`DEV_FAKE_MODEL=true` 的确定性假模型 + 固定数据集**上，用于验证控制面逻辑是否按预期触发，**不代表真实模型效果**；唯一使用真实模型的是通道路由离线评测，样本为 **20 条任务（10 单指标 / 5 多步 / 5 报告）× 2 轮（三档 vs 全 deep 基线）**——样本小、非生产流量，下列分档准确率 100%、误升级率 0%、单查询 token −85%、平均 token −19% 均为当次运行记录，需要真实 API Key 才能复跑。
 
 ## Harness 是什么
 
@@ -25,7 +27,7 @@ Harness 就是模型之外的一切：系统提示词、工具调用、编排逻
 | **Recovery（分级恢复）** | 失败即终止、不确定写重复副作用 | 工具失败按错误类型分级：瞬态→指数退避重试；不确定写操作→先对账（检查副作用是否已落地）再决定重试；模型限流→沿 fallback 链降级 |
 | **Loop Guard（循环检测）** | 连续重复调用烧预算不收敛 | action+params 哈希滑窗比对，连续重复自动终止（`stop_reason=loop_detected`） |
 | **Context Governance（上下文治理）** | 长任务上下文膨胀劣化 | Compaction（旧消息摘要压缩）+ Reset（状态外化），下发 `context_compressed` 事件 |
-| **Evaluation（评估体系）** | 改动后质量回归靠手感 | pytest 68 用例（单测 + 正常/边界/恢复/越权/预算/记忆/通道路由）+ 会话级指标门禁：Task Success>85%、工具成功率>95%、恢复>90%、拦截率=100%、Token/任务<50K |
+| **Evaluation（评估体系）** | 改动后质量回归靠手感 | pytest 73 用例（单测 + 正常/边界/恢复/越权/预算/记忆/通道路由；**假模型 + 固定数据集，确定性回归**）+ 会话级指标门禁：Task Success>85%、工具成功率>95%、恢复>90%、拦截率=100%、Token/任务<50K |
 | **Long-term Memory（长期记忆）** | 跨会话经验不可复用 | 门控通过的 run 结论沉淀 pgvector（dev 模式 SQLite 降级），`/memories` 支持列表与向量召回，新会话按需注入 |
 
 ## 核心特性
@@ -93,7 +95,7 @@ npm run dev
 - `.env` 里设 `DEV_FAKE_MODEL=true` → 用假模型跑通 SSE / 工具调用 / HITL / 门控全链路（无需 API Key，仅开发用）。
 
 接口文档：后端起来后 `http://127.0.0.1:8000/docs`；就绪检查 `GET /api/v1/health`。
-跑测试：`cd server && uv run pytest tests`（假模型 + 内存检查点，不依赖 Docker 与 API Key）。
+跑测试：`cd server && uv run python -m pytest tests`（用 `python -m` 把 `server/` 加入导入路径；假模型 + 内存检查点，不依赖 Docker 与 API Key）。
 
 ## 快速理解：一次受 Harness 约束的任务执行
 
@@ -110,16 +112,18 @@ npm run dev
 
 ## 验收状态
 
+> 下表 `*_check` 脚本与 pytest 用例均跑在**确定性假模型（`DEV_FAKE_MODEL=true`）+ 固定数据集**上（无需 API Key / Docker），衡量的是控制面逻辑是否按预期触发，不是模型能力；真实模型数据只出现在「通道路由改造」一行，样本 **20 条 × 2 轮**，非生产流量。
+
 | 里程碑 | 验收 |
 |---|---|
 | M1 流式对话 + 工具调用 | e2e_check ALL PASS |
 | M2 MCP 热插拔 | m2_check 16/16 PASS |
 | M3 HITL 人工确认 | m3_check 14/14 PASS（含跨进程重启恢复） |
-| **Harness Phase 1 契约/权限/门控/预算** | **harness_check 14/14 PASS**（越权 100% 拦截、预算干净终止、门控拦截、契约跨进程存活） |
-| **Harness Phase 2 追踪/预算仪表/模型降级** | **phase2_check 16/16 PASS**（span waterfall + parent 关联、预算快照、重试不降级、fallback 链、`/models`、`/runs`、会话级模型覆盖） |
-| **Harness Phase 3 恢复/循环检测/上下文治理/不变量** | **phase3_check 13/13 PASS**（瞬态重试、不确定写对账、限流降级、loop_detected、Compaction/Reset 事件、invariants 门控消费） |
-| **Harness Phase 4 评估体系 + 长期记忆** | **`pytest tests` 68 passed**，指标门禁全 PASS：Task Success 100%（>85%）、Tool Success 97.4%（>95%）、Recovery 100%（>90%）、Interception 100%（=100%）、Token/任务 181（<50K）；`/memories` 沉淀与向量召回用例通过 |
-| **通道路由改造** | **`pytest tests` 68 passed**（含 `tests/eval/test_routing.py` 13 条：分档、单查询 fast 单次取数、clarify 零工具、连续拒绝/连续失败/结果过大/模型申请升级、fast→calc→deep 逐级升级后 wrap_up、锁定通道不升级、门控证据不足升档、非法通道 422；`tests/unit/test_nl2sql_guard.py` 5 条只读 SQL 守卫）；新增 NL2SQL 场景 MCP Server（合成电商数据 + 只读 SQL 守卫 + `report_cites_queries` 不变量）；**20 条任务 × 两轮（三档 / 全 deep 基线）真实模型实测：分档准确率 100%、误升级率 0%、单查询 token −85%、平均 token −19%** |
+| **Harness Phase 1 契约/权限/门控/预算** | **harness_check 14/14 PASS**（假模型；越权 100% 拦截、预算干净终止、门控拦截、契约跨进程存活） |
+| **Harness Phase 2 追踪/预算仪表/模型降级** | **phase2_check 16/16 PASS**（假模型；span waterfall + parent 关联、预算快照、重试不降级、fallback 链、`/models`、`/runs`、会话级模型覆盖） |
+| **Harness Phase 3 恢复/循环检测/上下文治理/不变量** | **phase3_check 13/13 PASS**（假模型；瞬态重试、不确定写对账、限流降级、loop_detected、Compaction/Reset 事件、invariants 门控消费） |
+| **Harness Phase 4 评估体系 + 长期记忆** | **`pytest tests` 73 passed**（假模型 + 固定种子数据）；指标门禁统计样本 **49 条用例记录 / 77 次工具调用**，全 PASS：Task Success 100%（>85%）、Tool Success 97.4%（>95%）、Recovery 100%（>90%）、Interception 100%（=100%）、Token/任务 181（<50K）；`/memories` 沉淀与向量召回用例通过 |
+| **通道路由改造** | **`pytest tests` 73 passed**（假模型；含 `tests/eval/test_routing.py` 13 条：分档、单查询 fast 单次取数、clarify 零工具、连续拒绝/连续失败/结果过大/模型申请升级、fast→calc→deep 逐级升级后 wrap_up、锁定通道不升级、门控证据不足升档、非法通道 422；`tests/unit/test_nl2sql_guard.py` 10 条：只读守卫 5、JOIN 粒度告警 2、同 SQL 结果复用 1、报告数字占位符 2）；新增 NL2SQL 场景 MCP Server（合成电商数据 + 只读 SQL 守卫 + `report_cites_queries` 不变量）；**真实模型离线评测：20 条任务（10 单指标 / 5 多步 / 5 报告）× 2 轮（三档 / 全 deep 基线），样本小、非生产流量、需 API Key 复跑——分档准确率 100%、误升级率 0%、单查询 token −85%、平均 token −19%** |
 | **前端 Phase 1-4 + 通道路由适配** | `npm run build` 通过；契约面板透传生效、通道选择器（自动/fast/calc/deep，指定即锁定）、`channel_selected`/`escalated`/`wrap_up` 提示条、RunStatusBar（通道/升级/门控/拦截/降级/预算进度）、TraceViewer run 列表 + span waterfall |
 
 ## 可观测性（Phase 2）

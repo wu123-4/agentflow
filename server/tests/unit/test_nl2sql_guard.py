@@ -46,3 +46,46 @@ def test_guard_rejects_oversized_limit(tmp_path, monkeypatch):
     m = _load(tmp_path, monkeypatch)
     _, err = m._guard("SELECT * FROM orders LIMIT 500")
     assert err and "LIMIT" in err
+
+
+def test_join_grain_warns_when_both_keys_non_unique(tmp_path, monkeypatch):
+    """两侧关联键都不唯一 -> 告警（语法对但行数会被放大）。"""
+    m = _load(tmp_path, monkeypatch)
+    warns = m._join_grain_warnings(
+        "SELECT * FROM orders o JOIN customers c ON o.region_id = c.region_id")
+    assert warns and "放大" in warns[0]
+
+
+def test_join_grain_silent_on_unique_key(tmp_path, monkeypatch):
+    """一侧是唯一键（customers.id）-> 不告警。"""
+    m = _load(tmp_path, monkeypatch)
+    assert m._join_grain_warnings(
+        "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id") == []
+
+
+def test_run_sql_reuses_result_for_same_sql(tmp_path, monkeypatch):
+    """同一条 SQL（仅空白差异）第二次命中缓存，返回同一 query_id。"""
+    m = _load(tmp_path, monkeypatch)
+    first = m.run_sql("SELECT count(*) AS n FROM orders")
+    second = m.run_sql("SELECT  count(*)  AS n  FROM orders")
+    assert m._QUERY_ID.search(first).group(0) == m._QUERY_ID.search(second).group(0)
+    assert "复用" in second
+
+
+def test_write_report_resolves_placeholders(tmp_path, monkeypatch):
+    """报告里的数字由程序按 query_id + 行号 + 列名取值。"""
+    m = _load(tmp_path, monkeypatch)
+    out = m.run_sql("SELECT count(*) AS n FROM orders")
+    qid = m._QUERY_ID.search(out).group(0)
+    res = m.write_report("订单数", f"订单数：{{{{{qid}.r1.n}}}}")
+    assert res.startswith("报告已写入")
+    path = Path(res.split("报告已写入 ")[1].split("（")[0])
+    body = path.read_text(encoding="utf-8")
+    assert "{{" not in body and qid not in body
+
+
+def test_write_report_rejects_unresolved_placeholder(tmp_path, monkeypatch):
+    """引用了不存在的 query_id -> 拒绝写报告。"""
+    m = _load(tmp_path, monkeypatch)
+    res = m.write_report("t", "订单数：{{q_deadbeef.r1.n}}")
+    assert res.startswith("ERROR") and "无法解析" in res
